@@ -40,7 +40,15 @@
         const apiKey = ""; 
         const EXCHANGE_RATE = 31;
 
-        // --- Lucide Icon 組件 (修復版) ---
+        // --- 輔助函數：格式化金額 ---
+        const formatMoney = (val) => {
+            return Number(val).toLocaleString(undefined, { 
+                minimumFractionDigits: 2, 
+                maximumFractionDigits: 2 
+            });
+        };
+
+        // --- Lucide Icon 組件 ---
         const Icon = ({ name, size = 24, strokeWidth = 2, className = "" }) => {
             const iconRef = useRef(null);
             useEffect(() => {
@@ -75,8 +83,8 @@
             return (
                 <div className="w-full mt-6 px-2">
                     <div className="flex gap-4 mb-4">
-                        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-sky-400 shadow-[0_0_5px_rgba(56,189,248,0.5)]"></div><span className="text-[10px] font-black uppercase">USD</span></div>
-                        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_5px_rgba(16,185,129,0.5)]"></div><span className="text-[10px] font-black uppercase">TWD</span></div>
+                        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-sky-400"></div><span className="text-[10px] font-black uppercase tracking-widest">USD Assets</span></div>
+                        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-emerald-400"></div><span className="text-[10px] font-black uppercase tracking-widest">TWD Assets</span></div>
                     </div>
                     <div className="h-32 relative">
                         <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
@@ -107,7 +115,7 @@
 
             const [transactions, setTransactions] = useState([]);
             const [accounts, setAccounts] = useState([
-                { id: 'default-acc', name: '主要帳戶', balance: 0, currency: 'USD', location: '美國', lastBalance: 0 }
+                { id: 'default-acc', name: 'Chase Checking', balance: 0, currency: 'USD', location: '美國', lastBalance: 0 }
             ]);
             const [investments, setInvestments] = useState([]);
             const [assetHistory, setAssetHistory] = useState([]);
@@ -115,11 +123,11 @@
             const [editingTx, setEditingTx] = useState(null);
 
             const [budgets, setBudgets] = useState({
-                '餐飲': 800, '居住': 1500, '交通': 200, '娛樂': 400, '個人': 200,
+                '餐飲': 800.00, '居住': 1500.00, '交通': 200.00, '娛樂': 400.00, '個人': 200.00,
             });
 
             const [houseGoal, setHouseGoal] = useState({
-                target: 200000, 
+                target: 200000.00, 
                 deadline: `${now.getFullYear() + 10}-12-31`, 
             });
 
@@ -145,6 +153,14 @@
 
             const { totalSpentUSD: currentTotalSpentUSD, catStats: currentCatStats, needTotal, wantTotal } = getMonthlyData(currentYearMonth);
 
+            const tripSpentData = useMemo(() => {
+                const stats = {};
+                transactions.filter(t => t.tripId).forEach(t => {
+                    stats[t.tripId] = (stats[t.tripId] || 0) + toUSD(t.amount, t.currency);
+                });
+                return stats;
+            }, [transactions]);
+
             const totalTravelSpent = useMemo(() => {
                 return transactions.filter(t => t.type === 'travel').reduce((sum, t) => sum + toUSD(t.amount, t.currency), 0);
             }, [transactions]);
@@ -164,17 +180,17 @@
                     });
                     const result = await response.json();
                     setAiInsight(result.candidates?.[0]?.content?.parts?.[0]?.text);
-                } catch (e) { setAiInsight("AI 分析暫時無法連線。"); }
+                } catch (e) { setAiInsight("AI 分析暫時連線失敗。"); }
                 finally { setIsAiLoading(false); }
             };
 
             // --- 功能處理 ---
             const handleUpdateValue = (newVal) => {
                 const { type, item } = showUpdateModal;
-                const valueNum = Number(newVal);
+                const valueNum = parseFloat(newVal);
                 let updatedAccs = [...accounts]; let updatedInvs = [...investments];
                 if (type === 'acc') { updatedAccs = accounts.map(acc => acc.id === item.id ? { ...acc, balance: valueNum } : acc); setAccounts(updatedAccs); }
-                else { updatedInvs = investments.map(inv => inv.id === item.id ? { ...inv, currentVal: valueNum, history: [{ date: todayStr, amount: valueNum, diff: valueNum - inv.currentVal, percent: inv.currentVal > 0 ? ((valueNum/inv.currentVal-1)*100).toFixed(1) : 0 }, ...(inv.history || [])] } : inv); setInvestments(updatedInvs); }
+                else { updatedInvs = investments.map(inv => inv.id === item.id ? { ...inv, currentVal: valueNum, history: [{ date: todayStr, amount: valueNum, diff: valueNum - inv.currentVal, percent: inv.currentVal > 0 ? ((valueNum/inv.currentVal-1)*100).toFixed(2) : 0 }, ...(inv.history || [])] } : inv); setInvestments(updatedInvs); }
                 
                 const curUSD = updatedAccs.filter(a => a.currency === 'USD').reduce((s, a) => s + a.balance, 0) + updatedInvs.filter(i => i.currency === 'USD').reduce((s, i) => s + i.currentVal, 0);
                 const curTWD = updatedAccs.filter(a => a.currency === 'TWD').reduce((s, a) => s + a.balance, 0) + updatedInvs.filter(i => i.currency === 'TWD').reduce((s, i) => s + i.currentVal, 0);
@@ -185,7 +201,7 @@
             };
 
             const handleAIInsight = () => {
-                const prompt = `分析本月日常支出 $${currentTotalSpentUSD.toFixed(1)} USD。必要佔 ${currentTotalSpentUSD > 0 ? ((needTotal/currentTotalSpentUSD)*100).toFixed(0) : 0}%。請給我簡短建議。`;
+                const prompt = `分析本月日常支出 $${currentTotalSpentUSD.toFixed(2)} USD。必要佔 ${currentTotalSpentUSD > 0 ? ((needTotal/currentTotalSpentUSD)*100).toFixed(0) : 0}%。請給我簡短建議。`;
                 callGemini(prompt, "妳是溫柔的海濱女孩理財專家。");
             };
 
@@ -198,7 +214,7 @@
                     const t = document.getElementById('tx-trip-t').value;
                     const a = document.getElementById('tx-trip-a').value;
                     if (t && a) {
-                        setTransactions([{ id: Date.now(), title: t, amount: Number(a), category: '旅遊', type: 'travel', currency: 'USD', month: currentYearMonth, date: todayStr, tripId }, ...transactions]);
+                        setTransactions([{ id: Date.now(), title: t, amount: parseFloat(a), category: '旅遊', type: 'travel', currency: 'USD', month: currentYearMonth, date: todayStr, tripId }, ...transactions]);
                         document.getElementById('tx-trip-t').value = ''; document.getElementById('tx-trip-a').value = '';
                     }
                 };
@@ -208,14 +224,14 @@
                         <div className="bg-[#4A6361] p-8 rounded-[3.5rem] text-white shadow-xl relative overflow-hidden">
                             <div className="absolute top-0 right-0 p-8 opacity-10"><Icon name="Globe" size={100} /></div>
                             <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-40">Journey Expenditure</p>
-                            <h3 className="text-3xl font-black mt-2">${Math.round(tripTotal).toLocaleString()} <span className="text-xs font-normal opacity-50">USD</span></h3>
+                            <h3 className="text-3xl font-black mt-2">${formatMoney(tripTotal)} <span className="text-xs font-normal opacity-50">USD</span></h3>
                             <div className="flex items-center gap-2 mt-4 text-[11px] font-bold text-[#CEE5D0]"><Icon name="MapPin" size={12} /> {trip.location} · {trip.dateRange}</div>
                         </div>
                         <div className="bg-white p-7 rounded-[3rem] shadow-sm border border-[#CEE5D0]">
                             <h4 className="text-xs font-black text-[#8EAC8D] uppercase tracking-widest mb-4">新增旅程開支</h4>
                             <div className="flex flex-col gap-4">
                                 <input id="tx-trip-t" placeholder="項目 (例如: 門票)" className="w-full p-4 rounded-2xl bg-[#FAF9F6] outline-none text-sm font-bold border-2 border-transparent focus:border-[#CEE5D0]" />
-                                <div className="flex gap-3"><input id="tx-trip-a" type="number" placeholder="金額" className="flex-1 p-4 rounded-2xl bg-[#FAF9F6] outline-none text-sm font-bold border-2 border-transparent focus:border-[#CEE5D0]" /><button onClick={handleAddTripExp} className="bg-[#8EAC8D] text-white px-6 rounded-2xl shadow-md active:scale-95 transition-all"><Icon name="Plus" /></button></div>
+                                <div className="flex gap-3"><input id="tx-trip-a" type="number" step="0.01" placeholder="0.00" className="flex-1 p-4 rounded-2xl bg-[#FAF9F6] outline-none text-sm font-bold border-2 border-transparent focus:border-[#CEE5D0]" /><button onClick={handleAddTripExp} className="bg-[#8EAC8D] text-white px-6 rounded-2xl font-black shadow-md active:scale-95 transition-all"><Icon name="Plus" /></button></div>
                             </div>
                         </div>
                         <div className="space-y-4">
@@ -223,7 +239,7 @@
                             {tripTxs.length === 0 ? (<div className="text-center py-10 italic text-[#BCC1B1] text-xs">尚無開支...</div>) : tripTxs.map(t => (
                                 <div key={t.id} className="bg-white p-6 rounded-[2.5rem] border border-[#F3F0D7] flex items-center justify-between group relative">
                                     <div className="flex items-center gap-4"><div className="p-3 bg-[#E0F2FE] rounded-2xl text-sky-400"><Icon name="Ticket" size={18} /></div><div><p className="font-black text-sm text-[#4A6361]">{t.title}</p><p className="text-[9px] text-[#BCC1B1] font-bold uppercase tracking-widest">{t.date}</p></div></div>
-                                    <p className="font-black text-base text-[#4A6361]">${t.amount}</p>
+                                    <p className="font-black text-base text-[#4A6361]">${formatMoney(t.amount)}</p>
                                     <button onClick={() => setTransactions(transactions.filter(i => i.id !== t.id))} className="absolute -left-2 -top-2 p-2 bg-white rounded-full shadow-md text-rose-300 opacity-0 group-hover:opacity-100 transition-all"><Icon name="X" size={10}/></button>
                                 </div>
                             ))}
@@ -241,7 +257,7 @@
                             <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-60 mt-1">Travel Passport & Journal</p>
                             <div className="grid grid-cols-2 gap-4 mt-8 pt-8 border-t border-white/10">
                                 <div><p className="text-[9px] font-black uppercase opacity-40">已完成旅程</p><p className="text-2xl font-black">{trips.length} <span className="text-xs opacity-50">STAMPS</span></p></div>
-                                <div><p className="text-[9px] font-black uppercase opacity-40">足跡總費用</p><p className="text-2xl font-black">${Math.round(totalTravelSpent).toLocaleString()} <span className="text-xs opacity-50">USD</span></p></div>
+                                <div><p className="text-[9px] font-black uppercase opacity-40">足跡總費用</p><p className="text-2xl font-black">${formatMoney(totalTravelSpent)} <span className="text-xs opacity-50">USD</span></p></div>
                             </div>
                         </div>
                     </div>
@@ -252,7 +268,10 @@
                                 <div className="passport-stamp text-[#8EAC8D]"><Icon name="Compass" size={80} /></div>
                                 <div className="flex justify-between items-start mb-4">
                                     <div><h3 className="text-xl font-black text-[#4A6361]">{trip.name}</h3><div className="flex items-center gap-2 text-[#8EAC8D] font-black text-[10px] uppercase mt-1 tracking-widest"><Icon name="MapPin" size={10} /> {trip.location}</div></div>
-                                    <div className="text-right"><p className="text-[9px] font-black text-[#BCC1B1] uppercase">{trip.dateRange}</p><p className="text-xl font-black text-[#4A6361] mt-1">${Math.round(transactions.filter(t => t.tripId === trip.id).reduce((s,t)=>s+toUSD(t.amount, t.currency),0)).toLocaleString()}</p></div>
+                                    <div className="text-right">
+                                        <p className="text-[9px] font-black text-[#BCC1B1] uppercase">{trip.dateRange}</p>
+                                        <p className="text-xl font-black text-[#4A6361] mt-1">${formatMoney(transactions.filter(t => t.tripId === trip.id).reduce((s,t)=>s+toUSD(t.amount, t.currency),0))}</p>
+                                    </div>
                                 </div>
                                 <div className="p-4 bg-[#FAF9F6] rounded-2xl border border-[#F3F0D7] text-[11px] leading-relaxed text-[#7A745C] font-medium">"{trip.memo || '開啟冒險細節...'}"</div>
                                 <div className="mt-4 flex justify-end text-[9px] font-black text-[#8EAC8D] uppercase tracking-widest items-center gap-1">開啟小帳本 <Icon name="ChevronRight" size={12}/></div>
@@ -280,7 +299,7 @@
                                         const n = document.getElementById('tn-trip-in').value; const l = document.getElementById('tl-trip-in').value;
                                         const d = document.getElementById('td-trip-in').value; const m = document.getElementById('tm-trip-in').value;
                                         if(n && l) { setTrips([{ id: Date.now().toString(), name: n, location: l, dateRange: d, memo: m }, ...trips]); setShowTripModal(false); }
-                                    }} className="w-full bg-[#8EAC8D] text-white p-6 rounded-3xl font-black shadow-xl">開始蓋章</button>
+                                    }} className="w-full bg-[#8EAC8D] text-white p-6 rounded-3xl font-black shadow-xl transition-all active:scale-95">開始蓋章</button>
                                 </div>
                             </div>
                         </div>
@@ -291,7 +310,7 @@
                             <div className="bg-white w-full max-w-sm rounded-[3rem] p-8 shadow-2xl border border-[#CEE5D0]">
                                 <div className="flex justify-between items-center mb-6 text-[#4A6361] font-black text-xl">預算設定 (USD)<button onClick={() => setShowBudgetModal(false)}><Icon name="X" /></button></div>
                                 <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2 scrollbar-hide">
-                                    {Object.entries(budgets).map(([cat, limit]) => (<div key={cat} className="space-y-1"><label className="text-[10px] font-black text-gray-400 ml-2">{cat}</label><input type="number" className="w-full p-4 rounded-2xl bg-[#FAF9F6] outline-none font-bold" defaultValue={limit} onBlur={(e) => setBudgets({...budgets, [cat]: Number(e.target.value)})} /></div>))}
+                                    {Object.entries(budgets).map(([cat, limit]) => (<div key={cat} className="space-y-1"><label className="text-[10px] font-black text-gray-400 ml-2">{cat}</label><input type="number" step="0.01" className="w-full p-4 rounded-2xl bg-[#FAF9F6] outline-none font-bold text-[#4A6361]" defaultValue={limit} onBlur={(e) => setBudgets({...budgets, [cat]: parseFloat(e.target.value)})} /></div>))}
                                 </div>
                                 <button onClick={() => setShowBudgetModal(false)} className="w-full bg-[#8EAC8D] text-white p-5 rounded-2xl font-black mt-6 shadow-lg shadow-[#CEE5D0]/30 transition-all active:scale-95">確認完成</button>
                             </div>
@@ -303,8 +322,8 @@
                             <div className="bg-white w-full max-w-sm rounded-[3rem] p-10 shadow-2xl text-center border border-[#CEE5D0]">
                                 <h3 className="font-black text-xl mb-2">更新數據</h3>
                                 <p className="text-[10px] text-gray-400 mb-6 font-black uppercase tracking-[0.2em]">{showUpdateModal.item.name}</p>
-                                <input type="number" id="upd-v-in" autoFocus className="w-full p-6 rounded-2xl bg-[#FAF9F6] border-2 border-[#CEE5D0] text-3xl font-black text-center mb-6 outline-none text-[#4A6361]" defaultValue={showUpdateModal.item.balance ?? showUpdateModal.item.currentVal} />
-                                <div className="flex gap-3"><button onClick={() => setShowUpdateModal(null)} className="flex-1 p-5 rounded-2xl font-bold bg-gray-100 text-gray-400">取消</button><button onClick={() => handleUpdateValue(document.getElementById('upd-v-in').value)} className="flex-[2] p-5 rounded-2xl font-black bg-[#8EAC8D] text-white shadow-xl shadow-[#CEE5D0]/30 transition-all active:scale-95">更新存檔</button></div>
+                                <input type="number" id="upd-v-in" step="0.01" autoFocus className="w-full p-6 rounded-2xl bg-[#FAF9F6] border-2 border-[#CEE5D0] text-3xl font-black text-center mb-6 outline-none text-[#4A6361]" defaultValue={showUpdateModal.item.balance ?? showUpdateModal.item.currentVal} />
+                                <div className="flex gap-3"><button onClick={() => setShowUpdateModal(null)} className="flex-1 p-5 rounded-2xl font-bold bg-gray-100 text-gray-400 transition-all active:scale-95">取消</button><button onClick={() => handleUpdateValue(document.getElementById('upd-v-in').value)} className="flex-[2] p-5 rounded-2xl font-black bg-[#8EAC8D] text-white shadow-xl shadow-[#CEE5D0]/30 transition-all active:scale-95">更新存檔</button></div>
                             </div>
                         </div>
                     )}
@@ -315,7 +334,7 @@
                                 <div className="flex justify-between items-center mb-6 text-[#4A6361] font-black text-xl">新增帳戶<button onClick={() => setShowAccountModal(false)}><Icon name="X"/></button></div>
                                 <div className="space-y-4">
                                     <input placeholder="帳戶名稱 (如 Chase)" className="w-full p-4 rounded-2xl bg-[#FAF9F6] outline-none text-sm font-bold border-2 border-transparent focus:border-[#CEE5D0]" id="an-in" />
-                                    <input type="number" placeholder="初始餘額" className="w-full p-4 rounded-2xl bg-[#FAF9F6] outline-none text-sm font-bold border-2 border-transparent focus:border-[#CEE5D0]" id="ab-in" />
+                                    <input type="number" step="0.01" placeholder="初始餘額 (0.00)" className="w-full p-4 rounded-2xl bg-[#FAF9F6] outline-none text-sm font-bold border-2 border-transparent focus:border-[#CEE5D0]" id="ab-in" />
                                     <div className="flex gap-2">
                                         <select className="flex-1 p-5 rounded-2xl bg-[#FAF9F6] text-sm font-bold" id="ac-in"><option value="USD">USD</option><option value="TWD">TWD</option></select>
                                         <select className="flex-1 p-5 rounded-2xl bg-[#FAF9F6] text-sm font-bold" id="al-in"><option value="美國">美國</option><option value="台灣">台灣</option></select>
@@ -323,8 +342,8 @@
                                     <button onClick={() => {
                                         const n = document.getElementById('an-in').value; const b = document.getElementById('ab-in').value;
                                         const c = document.getElementById('ac-in').value; const l = document.getElementById('al-in').value;
-                                        if(n && b) { setAccounts([...accounts, { id: Date.now(), name: n, balance: Number(b), currency: c, location: l, lastBalance: Number(b) }]); setShowAccountModal(false); }
-                                    }} className="w-full bg-[#8EAC8D] text-white p-5 rounded-2xl font-black shadow-lg">儲存帳戶</button>
+                                        if(n && b) { setAccounts([...accounts, { id: Date.now(), name: n, balance: parseFloat(b), currency: c, location: l, lastBalance: parseFloat(b) }]); setShowAccountModal(false); }
+                                    }} className="w-full bg-[#8EAC8D] text-white p-5 rounded-2xl font-black shadow-lg shadow-[#CEE5D0]/30 transition-all active:scale-95">儲存帳戶</button>
                                 </div>
                             </div>
                         </div>
@@ -336,12 +355,12 @@
                                 <div className="flex justify-between items-center mb-6 text-[#4A6361] font-black text-xl">新增投資<button onClick={() => setShowInvestModal(false)}><Icon name="X"/></button></div>
                                 <div className="space-y-4">
                                     <input placeholder="資產名稱" className="w-full p-4 rounded-2xl bg-[#FAF9F6] outline-none text-sm font-bold border-2 border-transparent focus:border-[#CEE5D0]" id="in-in" />
-                                    <input type="number" placeholder="目前價值" className="w-full p-4 rounded-2xl bg-[#FAF9F6] outline-none text-sm font-bold border-2 border-transparent focus:border-[#CEE5D0]" id="iv-in" />
+                                    <input type="number" step="0.01" placeholder="目前現值 (0.00)" className="w-full p-4 rounded-2xl bg-[#FAF9F6] outline-none text-sm font-bold border-2 border-transparent focus:border-[#CEE5D0]" id="iv-in" />
                                     <select className="w-full p-5 rounded-2xl bg-[#FAF9F6] text-sm font-bold" id="ic-in"><option value="USD">USD</option><option value="TWD">TWD</option></select>
                                     <button onClick={() => {
                                         const n = document.getElementById('in-in').value; const v = document.getElementById('iv-in').value; const c = document.getElementById('ic-in').value;
-                                        if(n && v) { setInvestments([...investments, { id: Date.now(), name: n, currentVal: Number(v), currency: c, lastVal: Number(v), history: [{date: todayStr, amount: Number(v), diff: 0, percent: 0}] }]); setShowInvestModal(false); }
-                                    }} className="w-full bg-[#4A6361] text-white p-5 rounded-2xl font-black shadow-lg">儲存投資</button>
+                                        if(n && v) { setInvestments([...investments, { id: Date.now(), name: n, currentVal: parseFloat(v), currency: c, lastVal: parseFloat(v), history: [{date: todayStr, amount: parseFloat(v), diff: 0, percent: 0}] }]); setShowInvestModal(false); }
+                                    }} className="w-full bg-[#4A6361] text-white p-5 rounded-2xl font-black shadow-lg transition-all active:scale-95">儲存投資</button>
                                 </div>
                             </div>
                         </div>
@@ -359,8 +378,8 @@
                             <div className="space-y-6 fade-in">
                                 <div className="pastel-gradient p-8 rounded-[3rem] shadow-xl border border-white/50 relative overflow-hidden group">
                                     <div className="flex justify-between items-center mb-4"><h3 className="text-xs font-black text-[#4A6361] uppercase tracking-[0.2em] flex items-center gap-2">✨ ✨ AI 理財分析</h3>{isAiLoading && <Icon name="Loader2" size={16} className="animate-spin text-[#8EAC8D]"/>}</div>
-                                    {aiInsight ? (<div className="animate-in fade-in"><p className="text-sm font-bold text-[#4A6361]/80 leading-relaxed italic">"{aiInsight}"</p><button onClick={() => setAiInsight("")} className="mt-4 text-[9px] font-black uppercase text-[#8EAC8D] underline tracking-widest">關閉分析</button></div>) 
-                                    : (<div className="flex flex-col gap-3"><p className="text-[10px] font-medium text-[#5F7A61]">想聽聽本月日常支出的建議嗎？</p><button onClick={handleAIInsight} disabled={isAiLoading} className="w-full bg-white/60 backdrop-blur-md text-[#4A6361] p-3.5 rounded-2xl font-black text-[11px] shadow-sm flex items-center justify-center gap-2">✨ 獲取建議</button></div>)}
+                                    {aiInsight ? (<div className="animate-in fade-in"><p className="text-sm font-bold text-[#4A6361]/80 leading-relaxed italic">"{aiInsight}"</p><button onClick={() => setAiInsight("")} className="mt-4 text-[9px] font-black uppercase text-[#8EAC8D] underline tracking-widest transition-all hover:text-[#4A6361]">關閉分析</button></div>) 
+                                    : (<div className="flex flex-col gap-3"><p className="text-[10px] font-medium text-[#5F7A61]">想聽聽本月日常支出的建議嗎？</p><button onClick={handleAIInsight} disabled={isAiLoading} className="w-full bg-white/60 backdrop-blur-md text-[#4A6361] p-3.5 rounded-2xl font-black text-[11px] shadow-sm flex items-center justify-center gap-2 hover:bg-white transition-all active:scale-95">✨ 獲取建議</button></div>)}
                                 </div>
                                 <div className="bg-white p-8 rounded-[3.5rem] border border-[#F3F0D7] shadow-sm">
                                     <div className="flex justify-between items-center mb-5"><h3 className="text-xs font-black text-[#4A6361] uppercase tracking-[0.2em] flex items-center gap-2"><Icon name="PieChart" size={14} className="text-[#8EAC8D]"/> 消費結構分析</h3></div>
@@ -369,16 +388,16 @@
                                 </div>
                                 <div className="bg-[#CEE5D0] p-9 rounded-[3.5rem] text-[#4A6361] shadow-2xl border border-[#B8D4BB]">
                                     <p className="opacity-80 text-[10px] font-black uppercase tracking-widest">本月日常支出 (USD)</p>
-                                    <h2 className="text-4xl font-black mt-3">${Math.round(currentTotalSpentUSD).toLocaleString()}</h2>
+                                    <h2 className="text-4xl font-black mt-3">${formatMoney(currentTotalSpentUSD)}</h2>
                                     <div className="mt-8 bg-white/30 h-4.5 rounded-full overflow-hidden"><div className="bg-[#8EAC8D] h-full rounded-full transition-all duration-1000 shadow-sm" style={{ width: `${Math.min((currentTotalSpentUSD / (Object.values(budgets).reduce((s,v)=>s+v,0))) * 100, 100)}%` }} /></div>
-                                    <div className="flex justify-between mt-4 text-[10px] font-black text-[#5F7A61]"><span>支出進度</span><span>總額度 ${Object.values(budgets).reduce((s,v)=>s+v,0).toLocaleString()}</span></div>
+                                    <div className="flex justify-between mt-4 text-[10px] font-black text-[#5F7A61]"><span>支出進度</span><span>總額度 ${formatMoney(Object.values(budgets).reduce((s,v)=>s+v,0))}</span></div>
                                 </div>
                                 <section className="px-1 pb-10">
-                                    <div className="flex justify-between items-center mb-6 font-black"><h3 className="text-lg flex items-center gap-2"><Icon name="Activity" size={18} className="text-[#8EAC8D]" /> 預算管理 (Budget)</h3><button onClick={() => setShowBudgetModal(true)} className="p-2 bg-white rounded-xl shadow-sm border border-[#F3F0D7] text-[#8EAC8D]"><Icon name="Settings2" size={16}/></button></div>
+                                    <div className="flex justify-between items-center mb-6 font-black"><h3 className="text-lg flex items-center gap-2"><Icon name="Activity" size={18} className="text-[#8EAC8D]" /> 預算管理 (Budget)</h3><button onClick={() => setShowBudgetModal(true)} className="p-2 bg-white rounded-xl shadow-sm border border-[#F3F0D7] text-[#8EAC8D] active:scale-90 transition-all"><Icon name="Settings2" size={16}/></button></div>
                                     <div className="grid grid-cols-1 gap-4">
                                         {Object.entries(budgets).map(([cat, limit]) => {
                                             const spent = currentCatStats[cat] || 0; const percent = (spent / limit) * 100;
-                                            return (<div key={cat} className="bg-white p-7 rounded-[2.5rem] border border-[#F3F0D7] flex items-center justify-between shadow-sm transition-all hover:scale-[1.02]"><div><p className="font-black">{cat}</p><span className={`text-[9px] font-black uppercase ${percent > 100 ? 'text-rose-400' : 'text-[#A39E82]'}`}>{percent > 100 ? '⚠️ 已透支' : `消耗 ${percent.toFixed(0)}%`}</span></div><div className="text-right"><p className="font-mono font-black text-xl text-[#8EAC8D]">${Math.round(spent)}</p><p className="text-[9px] text-gray-300 font-bold uppercase tracking-tighter">MAX ${limit}</p></div></div>);
+                                            return (<div key={cat} className="bg-white p-7 rounded-[2.5rem] border border-[#F3F0D7] flex items-center justify-between shadow-sm transition-all hover:scale-[1.02]"><div><p className="font-black">{cat}</p><span className={`text-[9px] font-black uppercase ${percent > 100 ? 'text-rose-400' : 'text-[#A39E82]'}`}>{percent > 100 ? '⚠️ 已透支' : `消耗 ${percent.toFixed(0)}%`}</span></div><div className="text-right"><p className="font-mono font-black text-xl text-[#8EAC8D]">${formatMoney(spent)}</p><p className="text-[9px] text-gray-300 font-bold uppercase tracking-tighter">MAX ${formatMoney(limit)}</p></div></div>);
                                         })}
                                     </div>
                                 </section>
@@ -391,7 +410,7 @@
                                     <div className="flex justify-between items-center mb-10"><h3 className="font-black text-2xl tracking-tight">{editingTx ? '修改紀錄' : '新增紀錄'}</h3><div className="bg-[#F8F9F4] px-5 py-2.5 rounded-2xl font-black text-[10px] text-[#8EAC8D]">USD</div></div>
                                     <div className="space-y-8">
                                         <div className="space-y-2"><label className="text-[10px] font-black text-gray-300 uppercase ml-3">項目</label><input placeholder="午餐、美妝、機票..." className="w-full p-6 rounded-[2.2rem] bg-[#FAF9F6] outline-none text-sm font-bold border-2 border-transparent focus:border-[#CEE5D0]" id="tn-m-in" defaultValue={editingTx?.title || ''} /></div>
-                                        <div className="space-y-2"><label className="text-[10px] font-black text-gray-300 uppercase ml-3">金額</label><div className="relative"><input type="number" placeholder="0.00" className="w-full p-6 rounded-[2.2rem] bg-[#FAF9F6] outline-none text-sm font-bold border-2 border-transparent focus:border-[#CEE5D0]" id="ta-m-in" defaultValue={editingTx?.amount || ''} /><span className="absolute right-8 top-1/2 -translate-y-1/2 font-black text-[#CEE5D0] text-xs">USD</span></div></div>
+                                        <div className="space-y-2"><label className="text-[10px] font-black text-gray-300 uppercase ml-3">金額</label><div className="relative"><input type="number" step="0.01" placeholder="0.00" className="w-full p-6 rounded-[2.2rem] bg-[#FAF9F6] outline-none text-sm font-bold border-2 border-transparent focus:border-[#CEE5D0]" id="ta-m-in" defaultValue={editingTx?.amount || ''} /><span className="absolute right-8 top-1/2 -translate-y-1/2 font-black text-[#CEE5D0] text-xs">USD</span></div></div>
                                         <div className="flex gap-4">
                                             <div className="flex-1 space-y-2"><label className="text-[10px] font-black text-gray-300 ml-3 uppercase tracking-widest">類別</label><select className="w-full p-6 rounded-[2.2rem] bg-[#FAF9F6] text-sm font-bold outline-none border-2 border-transparent focus:border-[#CEE5D0]" id="tc-m-in" defaultValue={editingTx?.category || '餐飲'}>{Object.keys(budgets).map(c => <option key={c}>{c}</option>)}<option value="旅遊">旅遊</option></select></div>
                                             <div className="flex-1 space-y-2"><label className="text-[10px] font-black text-gray-300 ml-3 uppercase tracking-widest">性質</label><select className="w-full p-6 rounded-[2.2rem] bg-[#FAF9F6] text-sm font-bold outline-none border-2 border-transparent focus:border-[#CEE5D0]" id="ty-m-in" defaultValue={editingTx?.type || 'need'}><option value="need">必要 🌿</option><option value="want">想要 ✨</option><option value="travel">旅遊 🌊</option></select></div>
@@ -410,8 +429,8 @@
                                             const c = document.getElementById('tc-m-in').value; const y = document.getElementById('ty-m-in').value;
                                             const tr = document.getElementById('tx-tr-in')?.value || null;
                                             if(n && a) {
-                                                if(editingTx) { setTransactions(transactions.map(i => i.id === editingTx.id ? {...i, title:n, amount:Number(a), category:c, type:y, tripId: tr} : i)); setEditingTx(null); }
-                                                else { setTransactions([{ id: Date.now(), title: n, amount: Number(a), category: c, type: y, currency: 'USD', month: currentYearMonth, date: todayStr, tripId: tr }, ...transactions]); }
+                                                if(editingTx) { setTransactions(transactions.map(i => i.id === editingTx.id ? {...i, title:n, amount:parseFloat(a), category:c, type:y, tripId: tr} : i)); setEditingTx(null); }
+                                                else { setTransactions([{ id: Date.now(), title: n, amount: parseFloat(a), category: c, type: y, currency: 'USD', month: currentYearMonth, date: todayStr, tripId: tr }, ...transactions]); }
                                                 setActiveTab('dashboard');
                                             }
                                         }} className="w-full bg-[#8EAC8D] text-white p-7 rounded-[2.5rem] font-black shadow-2xl active:scale-95 text-lg transition-all tracking-widest">記錄到本本</button>
@@ -426,25 +445,25 @@
                             <div className="space-y-8 pb-12 fade-in">
                                 <section className="bg-white p-10 rounded-[3.5rem] border border-[#CEE5D0] shadow-sm"><div className="flex items-center gap-2 text-[#4A6361] font-black text-sm uppercase tracking-widest mb-6"><Icon name="TrendingUp" size={16} strokeWidth={3} /> 資產趨勢 (USD & TWD)</div><DualTrendChart data={assetHistory} /></section>
                                 <section>
-                                    <div className="flex justify-between items-center mb-6 px-4 font-black"><h3 className="text-xl">帳戶與資產</h3><button onClick={() => setShowAccountModal(true)} className="text-[#8EAC8D] text-[10px] bg-white px-5 py-2.5 rounded-full shadow-sm border border-[#CEE5D0] active:scale-95 flex items-center gap-1 uppercase tracking-widest"><Icon name="Plus" size={14} /> 新增帳戶</button></div>
+                                    <div className="flex justify-between items-center mb-6 px-4 font-black"><h3 className="text-xl text-[#4A6361]">帳戶與資產</h3><button onClick={() => setShowAccountModal(true)} className="text-[#8EAC8D] text-[10px] bg-white px-5 py-2.5 rounded-full shadow-sm border border-[#CEE5D0] active:scale-95 flex items-center gap-1 uppercase tracking-widest"><Icon name="Plus" size={14} /> 新增帳戶</button></div>
                                     <div className="grid grid-cols-1 gap-5">{accounts.map(acc => (
-                                        <div key={acc.id} className="bg-white p-8 rounded-[3rem] border border-[#CEE5D0] flex items-center justify-between shadow-sm relative group transition-all hover:translate-y-[-2px]">
+                                        <div key={acc.id} className="bg-white p-8 rounded-[3rem] border border-[#CEE5D0] flex items-center justify-between shadow-sm relative group overflow-hidden transition-all hover:translate-y-[-2px]">
                                             <div className="flex items-center gap-5"><div className={`p-5 rounded-[1.5rem] ${acc.currency === 'USD' ? 'bg-sky-50 text-sky-400' : 'bg-emerald-50 text-emerald-400'}`}><Icon name="DollarSign" strokeWidth={3}/></div><div><div className="flex items-center gap-2"><p className="font-black text-[#4A6361]">{acc.name}</p><span className="text-[9px] bg-gray-50 text-gray-400 px-2.5 py-1 rounded-full font-black uppercase tracking-widest">{acc.location}</span></div><p className="text-[10px] text-gray-300 font-black mt-1 uppercase tracking-widest">{acc.currency}</p></div></div>
-                                            <div className="text-right flex flex-col items-end gap-2"><p className="text-2xl font-mono font-black text-[#4A6361]">${acc.balance.toLocaleString()}</p><button onClick={() => setShowUpdateModal({ type: 'acc', item: acc })} className="bg-[#FAF9F6] text-[#8EAC8D] p-2 px-4 rounded-2xl text-[10px] font-black uppercase flex items-center gap-1 hover:border-[#CEE5D0] border border-transparent active:scale-90 transition-all tracking-widest"><Icon name="RefreshCw" size={12} /></button></div>
+                                            <div className="text-right flex flex-col items-end gap-2"><p className="text-2xl font-mono font-black text-[#4A6361]">${formatMoney(acc.balance)}</p><button onClick={() => setShowUpdateModal({ type: 'acc', item: acc })} className="bg-[#FAF9F6] text-[#8EAC8D] p-2 px-4 rounded-2xl text-[10px] font-black uppercase flex items-center gap-1 hover:border-[#CEE5D0] border border-transparent active:scale-90 transition-all tracking-widest"><Icon name="RefreshCw" size={12} /></button></div>
                                             <button onClick={() => { if(confirm('刪除帳戶？')) setAccounts(accounts.filter(a => a.id !== acc.id)); }} className="absolute -left-2 -top-2 opacity-0 group-hover:opacity-100 p-2 bg-white rounded-full text-rose-300 shadow-md transition-all"><Icon name="Trash2" size={12}/></button>
                                         </div>
                                     ))}</div>
                                 </section>
                                 <section>
-                                    <div className="flex justify-between items-center mb-6 px-4 font-black"><h3 className="text-xl">投資與基金</h3><button onClick={() => setShowInvestModal(true)} className="text-[#5F7A61] text-[10px] bg-white px-5 py-2.5 rounded-full shadow-sm border border-[#F3F0D7] active:scale-95 flex items-center gap-1 uppercase tracking-widest"><Icon name="Plus" size={14} /> 新增投資</button></div>
+                                    <div className="flex justify-between items-center mb-6 px-4 font-black"><h3 className="text-xl text-[#4A6361]">投資與基金</h3><button onClick={() => setShowInvestModal(true)} className="text-[#5F7A61] text-[10px] bg-white px-5 py-2.5 rounded-full shadow-sm border border-[#F3F0D7] active:scale-95 flex items-center gap-1 uppercase tracking-widest"><Icon name="Plus" size={14} /> 新增投資</button></div>
                                     <div className="grid grid-cols-1 gap-6">{investments.map(inv => (
                                         <div key={inv.id} className="bg-[#F3F0D7]/40 rounded-[3.5rem] border border-[#F3F0D7] shadow-sm overflow-hidden group relative transition-all">
                                             <div className="p-8 flex items-center justify-between">
                                                 <div className="flex items-center gap-5"><div className="bg-white p-5 rounded-[1.75rem] shadow-sm text-[#A39E82]"><Icon name="Briefcase" strokeWidth={2.5}/></div><div><p className="font-black text-[#7A745C] text-lg">{inv.name}</p><p className="text-[10px] text-[#A39E82] font-black mt-1 uppercase tracking-widest">{inv.currency}</p></div></div>
-                                                <div className="text-right flex flex-col items-end gap-3"><p className="text-2xl font-mono font-black text-[#7A745C]">${inv.currentVal.toLocaleString()}</p><div className="flex gap-2"><button onClick={() => setViewHistoryId(viewHistoryId === inv.id ? null : inv.id)} className={`p-3 rounded-2xl transition-all shadow-sm ${viewHistoryId === inv.id ? 'bg-[#4A6361] text-white' : 'bg-white/80 text-[#A39E82]'}`}><Icon name="Clock" size={16}/></button><button onClick={() => setShowUpdateModal({ type: 'inv', item: inv })} className="bg-white/80 text-[#A39E82] p-3 px-5 rounded-2xl text-[10px] font-black uppercase flex items-center gap-2 border border-white/50 active:scale-90"><Icon name="RefreshCw" size={14}/></button></div></div>
+                                                <div className="text-right flex flex-col items-end gap-3"><p className="text-2xl font-mono font-black text-[#7A745C]">${formatMoney(inv.currentVal)}</p><div className="flex gap-2"><button onClick={() => setViewHistoryId(viewHistoryId === inv.id ? null : inv.id)} className={`p-3 rounded-2xl transition-all shadow-sm ${viewHistoryId === inv.id ? 'bg-[#4A6361] text-white' : 'bg-white/80 text-[#A39E82]'}`}><Icon name="Clock" size={16}/></button><button onClick={() => setShowUpdateModal({ type: 'inv', item: inv })} className="bg-white/80 text-[#A39E82] p-3 px-5 rounded-2xl text-[10px] font-black uppercase flex items-center gap-2 border border-white/50 active:scale-90"><Icon name="RefreshCw" size={14}/></button></div></div>
                                             </div>
-                                            {viewHistoryId === inv.id && (<div className="px-8 pb-8 animate-in slide-in-from-top-4"><div className="bg-white/60 rounded-[2.5rem] p-7 space-y-4 border border-white/50"><p className="text-[11px] font-black text-[#A39E82] uppercase tracking-[0.3em] mb-4 flex items-center gap-2 opacity-60"><Icon name="Clock" size={12}/> 變動紀錄</p>{inv.history?.map((h, i) => (<div key={i} className="flex justify-between items-center border-b border-[#F3F0D7]/80 pb-3 last:border-0 last:pb-0"><span className="text-[10px] font-black text-[#A39E82] tracking-widest">{h.date}</span><div className="text-right"><p className="text-sm font-black text-[#7A745C]">${h.amount.toLocaleString()}</p><span className={`text-[9px] font-black ${h.diff > 0 ? 'text-emerald-500' : 'text-rose-400'}`}>{h.diff > 0 ? '+' : ''}{h.diff.toLocaleString()} ({h.percent}%)</span></div></div>))}</div></div>)}
-                                            <button onClick={() => { if(confirm('刪除投資項目？')) setInvestments(investments.filter(i => i.id !== inv.id)); }} className="absolute -left-2 -top-2 p-2 bg-white rounded-full text-[#A39E82] shadow-md border border-[#F3F0D7] opacity-0 group-hover:opacity-100 transition-all"><Icon name="Trash2" size={12}/></button>
+                                            {viewHistoryId === inv.id && (<div className="px-8 pb-8 animate-in slide-in-from-top-4"><div className="bg-white/60 rounded-[2.5rem] p-7 space-y-4 border border-white/50"><p className="text-[11px] font-black text-[#A39E82] uppercase tracking-[0.3em] mb-4 flex items-center gap-2 opacity-60"><Icon name="Clock" size={12}/> 變動紀錄</p>{inv.history?.map((h, i) => (<div key={i} className="flex justify-between items-center border-b border-[#F3F0D7]/80 pb-3 last:border-0 last:pb-0"><span className="text-[10px] font-black text-[#A39E82] tracking-widest">{h.date}</span><div className="text-right"><p className="text-sm font-black text-[#7A745C]">${formatMoney(h.amount)}</p><span className={`text-[9px] font-black ${h.diff > 0 ? 'text-emerald-500' : 'text-rose-400'}`}>{h.diff > 0 ? '+' : ''}{formatMoney(h.diff)} ({h.percent}%)</span></div></div>))}</div></div>)}
+                                            <button onClick={() => { if(confirm('刪除投資項目？')) setInvestments(investments.filter(i => i.id !== inv.id)); }} className="absolute -left-2 -top-2 p-2 bg-white rounded-full text-[#A39E82] shadow-md border border-[#F3F0D7] opacity-0 group-hover:opacity-100 transition-all active:scale-90"><Icon name="Trash2" size={12}/></button>
                                         </div>
                                     ))}</div>
                                 </section>
@@ -453,11 +472,11 @@
 
                         {activeTab === 'archive' && (
                             <div className="space-y-6 pb-12 animate-in fade-in">
-                                <div className="flex items-center justify-between px-2 font-black"><h3 className="text-xl text-[#4A6361]">歷史帳本存檔</h3><button onClick={() => { setActiveTab('dashboard'); setAiInsight(""); }} className="p-3 bg-white rounded-full text-[#BCC1B1] shadow-sm"><Icon name="X" size={20}/></button></div>
+                                <div className="flex items-center justify-between px-2 font-black text-[#4A6361]"><h3 className="text-xl">歷史帳本存檔</h3><button onClick={() => { setActiveTab('dashboard'); setAiInsight(""); }} className="p-3 bg-white rounded-full text-[#BCC1B1] shadow-sm"><Icon name="X" size={20}/></button></div>
                                 <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide px-1">{availableMonths.map(m => (<button key={m} onClick={() => setSelectedArchiveMonth(m)} className={`px-8 py-4 rounded-[1.75rem] text-[11px] font-black whitespace-nowrap transition-all uppercase tracking-[0.2em] ${ (selectedArchiveMonth || currentYearMonth) === m ? 'bg-[#4A6361] text-[#CEE5D0] shadow-xl' : 'bg-white text-[#BCC1B1] border border-[#FAF9F6]'}`}>{m}</button>))}</div>
                                 <div className="bg-white p-10 rounded-[3.5rem] shadow-sm border border-[#F3F0D7]"><div className="space-y-6">
                                     {transactions.filter(t => t.month === (selectedArchiveMonth || currentYearMonth)).length === 0 ? <p className="text-center py-24 text-[11px] font-black text-gray-200 uppercase italic tracking-widest text-center">沒有浪花的聲音</p> : 
-                                    transactions.filter(t => t.month === (selectedArchiveMonth || currentYearMonth)).map(t => (<div key={t.id} className="group relative bg-[#FAF9F6]/80 rounded-[2.5rem] p-7 border border-transparent hover:border-[#CEE5D0] transition-all"><div className="flex items-center justify-between"><div className="flex items-center gap-5"><div className={`w-3.5 h-3.5 rounded-full ${t.type === 'need' ? 'bg-[#CEE5D0]' : 'bg-[#F3F0D7]'}`}></div><div><p className="text-sm font-black text-[#4A6361]">{t.title}</p><p className="text-[10px] text-[#BCC1B1] font-black uppercase mt-1 tracking-widest">{t.category}</p></div></div><div className="text-right"><p className="text-base font-black text-[#4A6361]">${t.amount}</p><p className="text-[9px] text-[#BCC1B1] font-bold tracking-tighter uppercase">{t.date}</p></div></div><div className="absolute right-6 top-1/2 -translate-y-1/2 flex gap-3 opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => { setEditingTx(t); setActiveTab('record'); }} className="p-2.5 bg-white rounded-full text-sky-400 shadow-md"><Icon name="Edit2" size={14}/></button><button onClick={() => { if(confirm('從本本中刪除？')) setTransactions(transactions.filter(i => i.id !== t.id)); }} className="p-2.5 bg-white rounded-full text-rose-300 shadow-md"><Icon name="Trash2" size={14}/></button></div></div>))}
+                                    transactions.filter(t => t.month === (selectedArchiveMonth || currentYearMonth)).map(t => (<div key={t.id} className="group relative bg-[#FAF9F6]/80 rounded-[2.5rem] p-7 border border-transparent hover:border-[#CEE5D0] transition-all"><div className="flex items-center justify-between"><div className="flex items-center gap-5"><div className={`w-3.5 h-3.5 rounded-full ${t.type === 'need' ? 'bg-[#CEE5D0]' : 'bg-[#F3F0D7]'}`}></div><div><p className="text-sm font-black text-[#4A6361]">{t.title}</p><p className="text-[10px] text-[#BCC1B1] font-black uppercase mt-1 tracking-widest">{t.category}</p></div></div><div className="text-right"><p className="text-base font-black text-[#4A6361]">${formatMoney(t.amount)}</p><p className="text-[9px] text-[#BCC1B1] font-bold tracking-tighter uppercase">{t.date}</p></div></div><div className="absolute right-6 top-1/2 -translate-y-1/2 flex gap-3 opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => { setEditingTx(t); setActiveTab('record'); }} className="p-2.5 bg-white rounded-full text-sky-400 shadow-md transition-all active:scale-90"><Icon name="Edit2" size={14}/></button><button onClick={() => { if(confirm('從本本中刪除？')) setTransactions(transactions.filter(i => i.id !== t.id)); }} className="p-2.5 bg-white rounded-full text-rose-300 shadow-md transition-all active:scale-90"><Icon name="Trash2" size={14}/></button></div></div>))}
                                 </div></div>
                             </div>
                         )}
